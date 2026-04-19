@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, type FC } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Typography, Container, Box, Alert, Avatar } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import {
@@ -13,6 +14,7 @@ import { MovieActions } from '../components/movies/MovieActions';
 import type { Movie } from '../types/tmdb.types';
 
 const TopRatedPage: FC = () => {
+  const navigate = useNavigate();
   const { data: accountData } = useAccount();
   const accountId = accountData?.id;
 
@@ -144,14 +146,24 @@ const TopRatedPage: FC = () => {
         maxHeight: '70vh',
       },
     },
-    muiTableBodyRowProps: {
+    muiTableBodyRowProps: ({ row }) => ({
+      onClick: (event) => {
+        // Prevent navigation if clicking on an interactive element (buttons/links)
+        const target = event.target as HTMLElement;
+        if (target.closest('button') || target.closest('a')) {
+          return;
+        }
+        navigate(`/movie/${row.original.id}`);
+      },
       sx: {
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
         '&:hover': {
-          bgcolor: 'rgba(255,255,255,0.03) !important',
+          bgcolor: 'rgba(255,255,255,0.05) !important',
         },
         borderBottom: '1px solid rgba(255,255,255,0.05)',
       },
-    },
+    }),
     muiTableHeadCellProps: {
       sx: {
         bgcolor: '#121212',
