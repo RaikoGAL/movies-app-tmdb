@@ -1,14 +1,13 @@
-import { useMemo, useState, useEffect, type FC } from 'react';
+import { useMemo, useEffect, useRef, type FC } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Typography, Container, Box, Alert, Avatar } from '@mui/material';
+import { Typography, Container, Box, Alert, Avatar, CircularProgress } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   MaterialReactTable,
   useMaterialReactTable,
   type MRT_ColumnDef,
-  type MRT_PaginationState,
 } from 'material-react-table';
-import { useTopRatedMovies } from '../hooks/useMovies';
+import { useTopRatedMoviesInfinite } from '../hooks/useMovies';
 import { useAccount } from '../hooks/useAccount';
 import { MovieActions } from '../components/movies/MovieActions';
 import type { Movie } from '../types/tmdb.types';
@@ -17,22 +16,44 @@ const TopRatedPage: FC = () => {
   const navigate = useNavigate();
   const { data: accountData } = useAccount();
   const accountId = accountData?.id;
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const [pagination, setPagination] = useState<MRT_PaginationState>({
-    pageIndex: 0,
-    pageSize: 20,
-  });
+  const { 
+    data, 
+    isLoading, 
+    isError, 
+    error, 
+    fetchNextPage, 
+    hasNextPage, 
+    isFetchingNextPage 
+  } = useTopRatedMoviesInfinite();
 
-  const { data, isLoading, isError, error, isFetching } = useTopRatedMovies(
-    pagination.pageIndex + 1
-  );
-
-  // Scroll to top on pagination change
+  // IntersectionObserver for Infinite Scroll
   useEffect(() => {
-    // Robust multi-target scroll to zero
-    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-    document.documentElement.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-  }, [pagination.pageIndex]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentSentinel = sentinelRef.current;
+    if (currentSentinel) {
+      observer.observe(currentSentinel);
+    }
+
+    return () => {
+      if (currentSentinel) {
+        observer.unobserve(currentSentinel);
+      }
+    };
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  const movies = useMemo(() => 
+    data?.pages.flatMap((page) => page.results) ?? [], 
+  [data]);
 
   const columns = useMemo<MRT_ColumnDef<Movie>[]>(
     () => [
@@ -123,15 +144,12 @@ const TopRatedPage: FC = () => {
 
   const table = useMaterialReactTable({
     columns,
-    data: data?.results ?? [],
-    manualPagination: true,
-    onPaginationChange: setPagination,
-    rowCount: data?.total_results ?? 0,
+    data: movies,
+    enablePagination: false, // Hide all default pagination controls
+    manualPagination: true, // We handle the loading manually
     state: {
       isLoading,
-      pagination,
       showAlertBanner: isError,
-      showProgressBars: isFetching,
     },
     // Cinematic Table Styling
     muiTablePaperProps: {
@@ -143,12 +161,12 @@ const TopRatedPage: FC = () => {
     },
     muiTableContainerProps: {
       sx: {
-        maxHeight: '70vh',
+        // Remove fixed height to allow page-level infinite scroll
+        maxHeight: 'none',
       },
     },
     muiTableBodyRowProps: ({ row }) => ({
       onClick: (event) => {
-        // Prevent navigation if clicking on an interactive element (buttons/links)
         const target = event.target as HTMLElement;
         if (target.closest('button') || target.closest('a')) {
           return;
@@ -198,6 +216,31 @@ const TopRatedPage: FC = () => {
 
         <Box sx={{ mt: 2, bgcolor: 'background.paper', borderRadius: 2, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
           <MaterialReactTable table={table} />
+          
+          {/* Scroll Sentinel & Loading Indicator */}
+          <Box 
+            ref={sentinelRef} 
+            sx={{ 
+              py: 4, 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              minHeight: 100 
+            }}
+          >
+            {isFetchingNextPage ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <CircularProgress size={24} color="primary" />
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                  Loading more movies...
+                </Typography>
+              </Box>
+            ) : !hasNextPage && movies.length > 0 ? (
+              <Typography variant="body2" sx={{ color: 'text.disabled', fontWeight: 600 }}>
+                You've reached the end of the top rated selection.
+              </Typography>
+            ) : null}
+          </Box>
         </Box>
       </Box>
     </Container>

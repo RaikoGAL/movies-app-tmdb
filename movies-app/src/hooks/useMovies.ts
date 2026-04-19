@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { moviesApi } from '../api/movies.api';
 import { QUERY_KEYS } from '../constants/queryKeys';
 
@@ -6,6 +6,21 @@ export const useTopRatedMovies = (page = 1) => {
   return useQuery({
     queryKey: [QUERY_KEYS.topRated, page],
     queryFn: () => moviesApi.getTopRatedMovies(page),
+  });
+};
+
+export const useTopRatedMoviesInfinite = () => {
+  return useInfiniteQuery({
+    queryKey: [QUERY_KEYS.topRated, 'infinite'],
+    queryFn: ({ pageParam = 1 }) => moviesApi.getTopRatedMovies(pageParam),
+    getNextPageParam: (lastPage) => {
+      // Limit to 5 pages (approx 100 movies)
+      if (lastPage.page < 5 && lastPage.page < lastPage.total_pages) {
+        return lastPage.page + 1;
+      }
+      return undefined;
+    },
+    initialPageParam: 1,
   });
 };
 
