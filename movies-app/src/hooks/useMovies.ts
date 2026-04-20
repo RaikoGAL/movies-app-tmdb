@@ -55,6 +55,12 @@ export const useAddRating = () => {
     mutationFn: ({ movieId, rating }: { movieId: number; rating: number }) =>
       moviesApi.addMovieRating(movieId, rating),
     onSuccess: (_, variables) => {
+      // Manually update the cache to ensure the UI updates instantly
+      queryClient.setQueryData([QUERY_KEYS.accountStates, variables.movieId], (old: any) => ({
+        ...old,
+        rated: { value: variables.rating },
+      }));
+
       queryClient.invalidateQueries({
         queryKey: [QUERY_KEYS.accountStates, variables.movieId],
       });
